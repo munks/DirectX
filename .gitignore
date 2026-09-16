@@ -8,6 +8,7 @@
 # Visual Studio build directories
 bin/
 main/x64/
+main/main/x64/
 main/Debug/
 main/Release/
 
