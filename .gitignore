@@ -1,0 +1,22 @@
+# Visual Studio user and workspace files
+.vs/
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
+
+# Visual Studio build directories
+bin/
+main/x64/
+main/Debug/
+main/Release/
+
+# Local build outputs
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.ipdb
+*.iobj
+*.log
+*.tlog
