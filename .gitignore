@@ -6,7 +6,6 @@
 *.VC.opendb
 
 # Visual Studio build directories
-bin/
 main/x64/
 main/main/x64/
 main/Debug/
@@ -21,3 +20,8 @@ main/Release/
 *.iobj
 *.log
 *.tlog
+
+# Keep the distributable executable, but ignore other bin artifacts.
+!bin/
+bin/*
+!bin/*.exe
