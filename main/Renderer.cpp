@@ -36,6 +36,8 @@ static bool CompileShader(const char* source, const char* entryPoint, const char
 template <typename RectangleType>
 static Object::RectangleConstants BuildRectangleConstants(const RectangleType& rectangle,
     POINT clientOrigin, UINT viewportWidth, UINT viewportHeight, float scale) {
+    // 게임 좌표는 데스크톱 절대 좌표다. 렌더링 직전에 클라이언트 좌표로 옮긴 뒤
+    // 뷰포트 중심을 기준으로 확대/축소한다.
     const float localX = rectangle.x - clientOrigin.x;
     const float localY = rectangle.y - clientOrigin.y;
     const float projectedX = viewportWidth * 0.5f + (localX - viewportWidth * 0.5f) * scale;
@@ -99,6 +101,7 @@ static D2D1_RECT_F GetTextRectangle(const UI::TextDrawRequest& text, float viewp
             break;
     }
 
+    // anchor는 기준점, offset은 기준점으로부터의 이동량이다.
     const float left = anchorX + text.offsetX - text.width * alignmentX;
     const float top = anchorY + text.offsetY - text.height * alignmentY;
     return D2D1::RectF(left, top, left + text.width, top + text.height);
@@ -136,7 +139,7 @@ POINT Renderer::ClientScreenOrigin() const {
     return origin;
 }
 
-bool Renderer::CreateTextFormat(UI::TextFormatId id, const wchar_t* fontFamily, float fontSize,
+bool Renderer::CreateTextFormat(UI::TextFormatId id, _In_z_ const wchar_t* fontFamily, float fontSize,
     DWRITE_TEXT_ALIGNMENT textAlignment, DWRITE_PARAGRAPH_ALIGNMENT paragraphAlignment) {
     if (!writeFactory_ || !fontFamily || fontSize <= 0.0f || textFormats_.contains(id)) {
         return false;
@@ -214,7 +217,7 @@ bool Renderer::CreateDirect2DTarget() {
         D2D1::ColorF(D2D1::ColorF::White), textBrush_.GetAddressOf()));
 }
 
-bool Renderer::Initialize(HWND window, UINT initialWidth, UINT initialHeight) {
+bool Renderer::Initialize(_In_ HWND window, UINT initialWidth, UINT initialHeight) {
     window_ = window;
     width_ = initialWidth;
     height_ = initialHeight;
@@ -321,7 +324,7 @@ void Renderer::Resize(UINT width, UINT height) {
     }
 }
 
-void Renderer::Render(const GameState* player, const std::unordered_map<Object::ObjectId, std::unique_ptr<Object::Rectangle>>& rectangles, const UI::TextDrawRequests& globalTexts, const UI::TextDrawRequests& sceneTexts) {
+void Renderer::Render(_In_opt_ const GameState* gameState, const std::unordered_map<Object::ObjectId, std::unique_ptr<Object::Rectangle>>& rectangles, const UI::TextDrawRequests& globalTexts, const UI::TextDrawRequests& sceneTexts) {
     if (!renderTarget_) return;
     constexpr float clearColor[] = { 0.04f, 0.06f, 0.10f, 1.0f };
     context_->ClearRenderTargetView(renderTarget_.Get(), clearColor);
@@ -337,9 +340,9 @@ void Renderer::Render(const GameState* player, const std::unordered_map<Object::
     const POINT clientOrigin = ClientScreenOrigin();
 
     D3D11_MAPPED_SUBRESOURCE mapped{};
-    if (player->_isAlive && SUCCEEDED(context_->Map(constantBuffer_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+    if (gameState && gameState->_isAlive && SUCCEEDED(context_->Map(constantBuffer_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
         *static_cast<Object::RectangleConstants*>(mapped.pData) =
-            BuildRectangleConstants(player->player, clientOrigin, width_, height_, scale_);
+            BuildRectangleConstants(gameState->player, clientOrigin, width_, height_, scale_);
         context_->Unmap(constantBuffer_.Get(), 0);
         context_->VSSetConstantBuffers(0, 1, constantBuffer_.GetAddressOf());
         context_->Draw(4, 0);
@@ -348,11 +351,13 @@ void Renderer::Render(const GameState* player, const std::unordered_map<Object::
         if (!rectangle) {
             continue;
         }
-        if (SUCCEEDED(context_->Map(constantBuffer_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
-            *static_cast<Object::RectangleConstants*>(mapped.pData) =
-                BuildRectangleConstants(*rectangle, clientOrigin, width_, height_, scale_);
-            context_->Unmap(constantBuffer_.Get(), 0);
+        // Map 실패 시에는 이전 상수 버퍼를 재사용하지 않고 해당 객체만 건너뛴다.
+        if (FAILED(context_->Map(constantBuffer_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+            continue;
         }
+        *static_cast<Object::RectangleConstants*>(mapped.pData) =
+            BuildRectangleConstants(*rectangle, clientOrigin, width_, height_, scale_);
+        context_->Unmap(constantBuffer_.Get(), 0);
         context_->VSSetConstantBuffers(0, 1, constantBuffer_.GetAddressOf());
         context_->Draw(4, 0);
     }

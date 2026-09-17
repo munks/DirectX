@@ -5,6 +5,8 @@
 #include <random>
 
 namespace Memory {
+    // 평문 값을 그대로 두지 않는 가벼운 난독화 계층이다.
+    // 클라이언트 메모리 변조를 완전히 막는 보안 기능은 아니며, 서버 검증을 대체하지 않는다.
     class ProtectedInt {
         public:
             ProtectedInt() {

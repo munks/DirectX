@@ -31,16 +31,16 @@ namespace ControlAI {
 }
 
 namespace ImpactFunc {
-	Object::RemoveTarget DestroyObject(Scene&, Object::Rectangle&, GameState&) {
+	Object::RemoveTarget DestroyObject(GameScene&, Object::Rectangle&, GameState&) {
 		return Object::RemoveTarget::Object;
 	}
 
-	Object::RemoveTarget DamageToPlayer(Scene&, Object::Rectangle&, GameState& gameState) {
+	Object::RemoveTarget DamageToPlayer(GameScene&, Object::Rectangle&, GameState& gameState) {
 		ApplyDamage(gameState);
 		return Object::RemoveTarget::Object;
 	}
 
-	Object::RemoveTarget DestroyRandomEnemy(Scene&, Object::Rectangle&, GameState&) {
+	Object::RemoveTarget DestroyRandomEnemy(GameScene&, Object::Rectangle&, GameState&) {
 		return Object::RemoveTarget::RandomEnemy;
 	}
 }

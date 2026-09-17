@@ -2,12 +2,12 @@
 #include "TimerEvent.h"
 
 #include "ControlAI.h"
-#include "Scene.h"
+#include "Scene/GameScene.h"
 #include "main.h"
 
 constexpr int MAX_ATTEMPT = 100;
 
-static void GetRandomPointInDevice (Scene& pScene, SceneData& data, float offset) {
+static void GetRandomPointInDevice(GameScene& pScene, SceneData& data, float offset) {
 	const float virtualLeft = (float)GetSystemMetrics(SM_XVIRTUALSCREEN);
 	const float virtualTop = (float)GetSystemMetrics(SM_YVIRTUALSCREEN);
 	const float virtualRight = virtualLeft + (float)GetSystemMetrics(SM_CXVIRTUALSCREEN);
@@ -29,7 +29,7 @@ static void GetRandomPointInDevice (Scene& pScene, SceneData& data, float offset
 }
 
 namespace TimerCallbackList {
-	void SpawnEnemy(Scene& pScene) {
+	void SpawnEnemy(GameScene& pScene) {
 		SceneData data;
 
 		//Create Player Chase Enemy
@@ -52,7 +52,7 @@ namespace TimerCallbackList {
 		pScene.CreateObject(data, Object::Type::Neutral, ControlAI::Stop, ImpactFunc::DestroyRandomEnemy);
 	}
 	
-	void MapScale(Scene& pScene) {
+	void MapScale(GameScene& pScene) {
 		pScene.SetScaleTrans(pScene.GetScale() - 0.1f, 3.0f);
 	}
 }

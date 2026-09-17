@@ -1,6 +1,6 @@
 #include "TimerManager.h"
 
-#include "Scene.h"
+#include "Scene/GameScene.h"
 
 #include <algorithm>
 
@@ -53,7 +53,8 @@ void TimerManager::Cancel(TimerId id) {
     }
 }
 
-void TimerManager::Update(Scene& scene, float deltaSeconds) {
+void TimerManager::Update(GameScene& scene, float deltaSeconds) {
+    // 콜백 안에서 등록된 이벤트는 _pendingEvents에 넣어 이번 순회에서는 실행하지 않는다.
     _isUpdating = true;
 
     for (auto iterator = _events.begin(); iterator != _events.end();) {

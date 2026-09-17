@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cstdint>
 
-class Scene;
+class GameScene;
 struct GameState;
 
 namespace Object {
@@ -25,7 +25,7 @@ namespace Object {
 	};
 
     using ControlAI = bool (*)(Rectangle& object, float deltaSeconds, GameState& player, float scale);
-    using ImpactFunc = RemoveTarget (*)(Scene& scene, Rectangle& object, GameState& player);
+    using ImpactFunc = RemoveTarget (*)(GameScene& scene, Rectangle& object, GameState& player);
 
     struct Rectangle {
         ObjectId id = 0;

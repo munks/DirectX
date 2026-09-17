@@ -1,8 +1,8 @@
 #pragma once
 
-class Scene;
+class GameScene;
 
-#define TimerEventCallback(name) void name(Scene&);
+#define TimerEventCallback(name) void name(GameScene&);
 
 namespace TimerCallbackList {
 	TimerEventCallback(SpawnEnemy);

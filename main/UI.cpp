@@ -4,7 +4,7 @@ namespace {
     UI::TextDrawRequests textRequests;
 }
 
-bool UI::CreateText(TextId id, const wchar_t* text, TextFormatId formatId, TextAnchor anchor, float offsetX, float offsetY, float width, float height) {
+bool UI::CreateText(TextId id, _In_opt_z_ const wchar_t* text, TextFormatId formatId, TextAnchor anchor, float offsetX, float offsetY, float width, float height) {
     return textRequests.emplace(id, TextDrawRequest{ text ? text : L"", formatId, anchor, offsetX, offsetY, width, height }).second;
 }
 
@@ -13,7 +13,7 @@ UI::TextDrawRequest* UI::FindText(TextId id) {
     return iterator != textRequests.end() ? &iterator->second : nullptr;
 }
 
-bool UI::SetText(TextId id, const wchar_t* text) {
+bool UI::SetText(TextId id, _In_opt_z_ const wchar_t* text) {
     TextDrawRequest* textRequest = FindText(id);
     if (!textRequest) {
         return false;

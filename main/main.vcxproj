@@ -54,7 +54,9 @@
 	<ClCompile Include="GameState.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Renderer.cpp" />
-    <ClCompile Include="Scene.cpp" />
+    <ClCompile Include="Scene\GameScene.cpp" />
+    <ClCompile Include="Scene\MainScene.cpp" />
+    <ClCompile Include="Scene\SceneBase.cpp" />
     <ClCompile Include="TimerEvent.cpp" />
     <ClCompile Include="TimerManager.cpp" />
     <ClCompile Include="UI.cpp" />
@@ -66,7 +68,9 @@
 	<ClInclude Include="main.h" />
     <ClInclude Include="Rectangle.h" />
     <ClInclude Include="Renderer.h" />
-    <ClInclude Include="Scene.h" />
+    <ClInclude Include="Scene\GameScene.h" />
+    <ClInclude Include="Scene\MainScene.h" />
+    <ClInclude Include="Scene\SceneBase.h" />
     <ClInclude Include="TimerEvent.h" />
     <ClInclude Include="TimerManager.h" />
     <ClInclude Include="UI.h" />

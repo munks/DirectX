@@ -1,9 +1,9 @@
 
-#include "Scene.h"
+#include "GameScene.h"
 
-#include "TimerEvent.h"
-#include "UI.h"
-#include "main.h"
+#include "../TimerEvent.h"
+#include "../UI.h"
+#include "../main.h"
 
 #include <cmath>
 #include <random>
@@ -41,7 +41,7 @@ static void UpdateFromWASD(Object::Rectangle& rect, float deltaSeconds, UINT scr
     rect.y = std::clamp(rect.y + yDirection * scaledSpeed * deltaSeconds, top, std::max(top, bottom));
 }
 
-bool Scene::IsOverlapping(const Object::Rectangle& first, const Object::Rectangle& second) {
+bool GameScene::IsOverlapping(const Object::Rectangle& first, const Object::Rectangle& second) {
     const float xDistance = std::abs(first.x - second.x);
     const float yDistance = std::abs(first.y - second.y);
     const float halfWidthSum = (first.width + second.width) * 0.5f;
@@ -50,18 +50,32 @@ bool Scene::IsOverlapping(const Object::Rectangle& first, const Object::Rectangl
     return xDistance <= halfWidthSum && yDistance <= halfHeightSum;
 }
 
-GameState& Scene::GetGameState() {
+GameState& GameScene::GetGameState() {
     return gGameState;
 }
 
-void Scene::Update() {
+void GameScene::Update() {
+    Renderer* renderer = GetRenderer();
+    if (!renderer) {
+        return;
+    }
+
     const auto now = std::chrono::steady_clock::now();
     const float deltaSeconds = std::chrono::duration<float>(now - _previousTime).count();
     RECT windowRect;
 
-    if (!_isPlayerInitialized) return;
+    if (!_isPlayerInitialized) {
+        return;
+    }
 
     _previousTime = now;
+    const bool isF5Down = (GetAsyncKeyState(VK_F5) & 0x8000) != 0;
+    if (!gGameState._isAlive && isF5Down && !_wasF5Down) {
+        // 새 인스턴스를 요청한다. 현재 씬은 Update가 끝난 후 SceneBase가 파기한다.
+        SceneBase::RequestSceneChange(std::make_unique<GameScene>(_initialData));
+    }
+    _wasF5Down = isF5Down;
+
     if (_transitionTime > 0.0f) {
         _transitionTime = std::max(0.0f, _transitionTime - deltaSeconds);
 
@@ -72,7 +86,7 @@ void Scene::Update() {
     }
     if (!_pause) {
         if (gGameState._isAlive) {
-            GetWindowRect(_renderer->Window(), &windowRect);
+            GetWindowRect(renderer->Window(), &windowRect);
 
             const LONG virtualLeft = GetSystemMetrics(SM_XVIRTUALSCREEN);
             const LONG virtualTop = GetSystemMetrics(SM_YVIRTUALSCREEN);
@@ -105,13 +119,14 @@ void Scene::Update() {
                 _vector |= kMoveUp;
             }
 
-            SetWindowPos(_renderer->Window(), nullptr, nextLeft, nextTop, 0, 0,
+            SetWindowPos(renderer->Window(), nullptr, nextLeft, nextTop, 0, 0,
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
-            UpdateFromWASD(gGameState.player, deltaSeconds, _renderer->Width(), _renderer->Height(), _renderer->ClientScreenOrigin(), _scale);
+            UpdateFromWASD(gGameState.player, deltaSeconds, renderer->Width(), renderer->Height(), renderer->ClientScreenOrigin(), _scale);
         }
 
         for (auto& [id, objectPointer] : _object) {
+            // 제거는 순회가 끝난 뒤 처리한다. erase를 즉시 수행하면 iterator가 무효화된다.
             bool shouldRemove = false;
             Object::Rectangle& object = *objectPointer;
 
@@ -143,10 +158,12 @@ void Scene::Update() {
         ProcessPendingRemovals();
     }
     _timers.Update(*this, deltaSeconds);
-    _renderer->Render(&gGameState, _object, UI::Texts(), _sceneTexts);
+    renderer->Render(&gGameState, _object, UI::Texts(), _sceneTexts);
 }
 
-void Scene::Initialize(SceneData data, Renderer* renderer) {
+void GameScene::Initialize(_In_ Renderer* renderer) {
+    SceneBase::Initialize(renderer);
+	const SceneData& data = _initialData;
 	gGameState = {};
 	gGameState.player.x = data.x;
 	gGameState.player.y = data.y;
@@ -158,9 +175,19 @@ void Scene::Initialize(SceneData data, Renderer* renderer) {
 	gGameState.player.blue = data.b;
 	gGameState._isAlive = true;
 	_isPlayerInitialized = true;
-	_renderer = renderer;
-    _renderer->SetScale(_scale);
+    GetRenderer()->SetScale(_scale);
     _previousTime = std::chrono::steady_clock::now();
+
+    // ClearTexts를 호출하지 않는다. FPS는 씬과 무관한 전역 UI이기 때문이다.
+    if (!UI::CreateText(TEXT_UI_LIFE, L"", TEXT_FORMAT_UI,
+        UI::TextAnchor::TopLeft, 10.0f, 10.0f, 240.0f, 60.0f)) {
+        UI::SetText(TEXT_UI_LIFE, L"");
+    }
+    UpdateLifeText(gGameState);
+    if (!UI::CreateText(TEXT_UI_GAMEOVER, L"", TEXT_FORMAT_GAMEOVER,
+        UI::TextAnchor::Center, 0.0f, 0.0f, 400.0f, 100.0f)) {
+        UI::SetText(TEXT_UI_GAMEOVER, L"");
+    }
 
     _sceneTexts.clear();
     AddOnce(2.0f, TimerCallbackList::SpawnEnemy);
@@ -168,7 +195,7 @@ void Scene::Initialize(SceneData data, Renderer* renderer) {
     AddRepeat(30.0f, TimerCallbackList::MapScale);
 }
 
-void Scene::CreateObject(SceneData data, Object::Type type, Object::ControlAI func, Object::ImpactFunc impact) {
+void GameScene::CreateObject(SceneData data, Object::Type type, Object::ControlAI func, Object::ImpactFunc impact) {
     auto obj = std::make_unique<Object::Rectangle>();
     const Object::ObjectId id = _nextObjectId++;
 
@@ -190,7 +217,7 @@ void Scene::CreateObject(SceneData data, Object::Type type, Object::ControlAI fu
     }
 }
 
-void Scene::RemoveRandomEnemy() {
+void GameScene::RemoveRandomEnemy() {
     if (_enemy.empty()) {
         return;
     }
@@ -199,11 +226,13 @@ void Scene::RemoveRandomEnemy() {
     QueueObjectRemoval(_enemy[distribution(random_engine)]);
 }
 
-void Scene::QueueObjectRemoval(Object::ObjectId id) {
-    _pendingRemovals.push_back(id);
+void GameScene::QueueObjectRemoval(Object::ObjectId id) {
+    if (std::find(_pendingRemovals.begin(), _pendingRemovals.end(), id) == _pendingRemovals.end()) {
+        _pendingRemovals.push_back(id);
+    }
 }
 
-void Scene::ProcessPendingRemovals() {
+void GameScene::ProcessPendingRemovals() {
     for (Object::ObjectId id : _pendingRemovals) {
         _object.erase(id);
         std::erase(_enemy, id);
@@ -212,14 +241,14 @@ void Scene::ProcessPendingRemovals() {
     _pendingRemovals.clear();
 }
 
-void Scene::SetScale(float scale) {
+void GameScene::SetScale(float scale) {
     _scale = std::max(0.01f, scale);
-    if (_renderer) {
-        _renderer->SetScale(_scale);
+    if (Renderer* renderer = GetRenderer()) {
+        renderer->SetScale(_scale);
     }
 }
 
-void Scene::SetScaleTrans(float toScale, float sec) {
+void GameScene::SetScaleTrans(float toScale, float sec) {
     _transitionScale = std::max(0.01f, toScale);
     _transitionStartScale = _scale;
     _transitionDuration = std::max(0.0f, sec);
@@ -230,11 +259,11 @@ void Scene::SetScaleTrans(float toScale, float sec) {
     }
 }
 
-bool Scene::CreateSceneText(UI::TextId id, const wchar_t* text, UI::TextFormatId formatId, UI::TextAnchor anchor, float offsetX, float offsetY, float width, float height) {
+bool GameScene::CreateSceneText(UI::TextId id, _In_opt_z_ const wchar_t* text, UI::TextFormatId formatId, UI::TextAnchor anchor, float offsetX, float offsetY, float width, float height) {
     return _sceneTexts.emplace(id, UI::TextDrawRequest{ text ? text : L"", formatId, anchor, offsetX, offsetY, width, height }).second;
 }
 
-bool Scene::SetSceneText(UI::TextId id, const wchar_t* text) {
+bool GameScene::SetSceneText(UI::TextId id, _In_opt_z_ const wchar_t* text) {
     const auto iterator = _sceneTexts.find(id);
     if (iterator == _sceneTexts.end()) {
         return false;
@@ -244,7 +273,7 @@ bool Scene::SetSceneText(UI::TextId id, const wchar_t* text) {
     return true;
 }
 
-bool Scene::SetSceneTextLayout(UI::TextId id, UI::TextAnchor anchor, float offsetX, float offsetY, float width, float height) {
+bool GameScene::SetSceneTextLayout(UI::TextId id, UI::TextAnchor anchor, float offsetX, float offsetY, float width, float height) {
     const auto iterator = _sceneTexts.find(id);
     if (iterator == _sceneTexts.end()) {
         return false;
@@ -258,22 +287,22 @@ bool Scene::SetSceneTextLayout(UI::TextId id, UI::TextAnchor anchor, float offse
     return true;
 }
 
-void Scene::RemoveSceneText(UI::TextId id) {
+void GameScene::RemoveSceneText(UI::TextId id) {
     _sceneTexts.erase(id);
 }
 
-TimerId Scene::AddOnce(float delaySeconds, TimerCallback callback) {
+TimerId GameScene::AddOnce(float delaySeconds, TimerCallback callback) {
     return _timers.AddOnce(delaySeconds, callback);
 }
 
-TimerId Scene::AddRepeat(float intervalSeconds, TimerCallback callback) {
+TimerId GameScene::AddRepeat(float intervalSeconds, TimerCallback callback) {
     return _timers.AddRepeat(intervalSeconds, callback);
 }
 
-TimerId Scene::AddRepeatAfter(float delaySeconds, float intervalSeconds, TimerCallback callback) {
+TimerId GameScene::AddRepeatAfter(float delaySeconds, float intervalSeconds, TimerCallback callback) {
     return _timers.AddRepeatAfter(delaySeconds, intervalSeconds, callback);
 }
 
-void Scene::CancelTimer(TimerId id) {
+void GameScene::CancelTimer(TimerId id) {
     _timers.Cancel(id);
 }

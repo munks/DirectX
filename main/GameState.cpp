@@ -26,7 +26,7 @@ void ApplyDamage(GameState& gameState, int damage) {
     gameState._life.Set(std::max(0, gameState._life.Get() - damage));
     if (gameState._life.Get() == 0) {
         gameState._isAlive = false;
-        UI::SetText(TEXT_UI_GAMEOVER, L"Game Over");
+        UI::SetText(TEXT_UI_GAMEOVER, L"Game Over\nPress F5 to Restart");
     }
     UpdateLifeText(gameState);
 }

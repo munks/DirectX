@@ -3,10 +3,10 @@
 #include <cstdint>
 #include <vector>
 
-class Scene;
+class GameScene;
 
 using TimerId = std::uint32_t;
-using TimerCallback = void (*)(Scene& scene);
+using TimerCallback = void (*)(GameScene& scene);
 
 struct TimerEvent {
     TimerId id = 0;
@@ -23,7 +23,7 @@ public:
     TimerId AddRepeat(float intervalSeconds, TimerCallback callback);
     TimerId AddRepeatAfter(float delaySeconds, float intervalSeconds, TimerCallback callback);
     void Cancel(TimerId id);
-    void Update(Scene& scene, float deltaSeconds);
+    void Update(GameScene& scene, float deltaSeconds);
 
 private:
     TimerId Add(float delaySeconds, float intervalSeconds, bool repeat, TimerCallback callback);
