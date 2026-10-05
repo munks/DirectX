@@ -2,26 +2,40 @@
 #include "GameScene.h"
 
 #include "../TimerEvent.h"
+#include "../Input.h"
 #include "../UI.h"
 #include "../main.h"
 
 #include <cmath>
 #include <random>
+#include <string>
 
 namespace {
     constexpr int kMoveLeft = 0b01;
     constexpr int kMoveUp = 0b10;
     constexpr float kWindowMoveSpeed = 100.0f;
+    // 최소화, 디버거 중단 등으로 큰 시간이 한 번에 반영되는 것을 방지한다.
+    constexpr float kMaximumDeltaSeconds = 0.1f;
+    constexpr UI::TextId kCountdownTextId = 100;
+    constexpr float kCountdownSeconds = 3.0f;
 }
 
 static void UpdateFromWASD(Object::Rectangle& rect, float deltaSeconds, UINT screenWidth, UINT screenHeight, POINT clientOrigin, float scale) {
     float xDirection = 0.0f;
     float yDirection = 0.0f;
 
-    if (GetAsyncKeyState('A') & 0x8000) xDirection -= 1.0f;
-    if (GetAsyncKeyState('D') & 0x8000) xDirection += 1.0f;
-    if (GetAsyncKeyState('W') & 0x8000) yDirection -= 1.0f;
-    if (GetAsyncKeyState('S') & 0x8000) yDirection += 1.0f;
+    if (Input::IsDown('A')) {
+        xDirection -= 1.0f;
+    }
+    if (Input::IsDown('D')) {
+        xDirection += 1.0f;
+    }
+    if (Input::IsDown('W')) {
+        yDirection -= 1.0f;
+    }
+    if (Input::IsDown('S')) {
+        yDirection += 1.0f;
+    }
 
     // Convert the scale-adjusted visible edges back into world coordinates.
     // The calculation is the inverse of the renderer's center-based projection.
@@ -61,7 +75,8 @@ void GameScene::Update() {
     }
 
     const auto now = std::chrono::steady_clock::now();
-    const float deltaSeconds = std::chrono::duration<float>(now - _previousTime).count();
+    const float elapsedSeconds = std::chrono::duration<float>(now - _previousTime).count();
+    const float deltaSeconds = std::clamp(elapsedSeconds, 0.0f, kMaximumDeltaSeconds);
     RECT windowRect;
 
     if (!_isPlayerInitialized) {
@@ -69,7 +84,21 @@ void GameScene::Update() {
     }
 
     _previousTime = now;
-    const bool isF5Down = (GetAsyncKeyState(VK_F5) & 0x8000) != 0;
+    if (_isCountingDown) {
+        const float countdownElapsed = std::chrono::duration<float>(now - _countdownStart).count();
+        if (countdownElapsed >= kCountdownSeconds) {
+            StartGameplay();
+        }
+        else {
+            const int remainingSeconds = static_cast<int>(std::ceil(kCountdownSeconds - countdownElapsed));
+            _sceneTexts.at(kCountdownTextId).text = std::to_wstring(remainingSeconds);
+        }
+
+        renderer->Render(&gGameState, _object, UI::Texts(), _sceneTexts, vsync);
+        return;
+    }
+
+    const bool isF5Down = Input::IsDown(VK_F5);
     if (!gGameState._isAlive && isF5Down && !_wasF5Down) {
         // 새 인스턴스를 요청한다. 현재 씬은 Update가 끝난 후 SceneBase가 파기한다.
         SceneBase::RequestSceneChange(std::make_unique<GameScene>(_initialData));
@@ -97,29 +126,42 @@ void GameScene::Update() {
             const LONG maxLeft = std::max(virtualLeft, virtualRight - windowWidth);
             const LONG maxTop = std::max(virtualTop, virtualBottom - windowHeight);
 
+            const float actualWindowX = static_cast<float>(windowRect.left);
+            const float actualWindowY = static_cast<float>(windowRect.top);
+            if (!_isWindowPositionInitialized ||
+                std::abs(actualWindowX - _windowX) > 1.0f ||
+                std::abs(actualWindowY - _windowY) > 1.0f) {
+                // 사용자가 창을 직접 옮겼다면 누적 위치를 실제 위치에 맞춘다.
+                _windowX = actualWindowX;
+                _windowY = actualWindowY;
+                _isWindowPositionInitialized = true;
+            }
+
             const float xDirection = (_vector & kMoveLeft) ? -1.0f : 1.0f;
             const float yDirection = (_vector & kMoveUp) ? -1.0f : 1.0f;
-            LONG nextLeft = static_cast<LONG>(std::lround(windowRect.left + xDirection * kWindowMoveSpeed * deltaSeconds));
-            LONG nextTop = static_cast<LONG>(std::lround(windowRect.top + yDirection * kWindowMoveSpeed * deltaSeconds));
+            _windowX += xDirection * kWindowMoveSpeed * deltaSeconds;
+            _windowY += yDirection * kWindowMoveSpeed * deltaSeconds;
 
-            if (nextLeft <= virtualLeft) {
-                nextLeft = virtualLeft;
+            if (_windowX <= virtualLeft) {
+                _windowX = static_cast<float>(virtualLeft);
                 _vector &= ~kMoveLeft;
             }
-            else if (nextLeft >= maxLeft) {
-                nextLeft = maxLeft;
+            else if (_windowX >= maxLeft) {
+                _windowX = static_cast<float>(maxLeft);
                 _vector |= kMoveLeft;
             }
-            if (nextTop <= virtualTop) {
-                nextTop = virtualTop;
+            if (_windowY <= virtualTop) {
+                _windowY = static_cast<float>(virtualTop);
                 _vector &= ~kMoveUp;
             }
-            else if (nextTop >= maxTop) {
-                nextTop = maxTop;
+            else if (_windowY >= maxTop) {
+                _windowY = static_cast<float>(maxTop);
                 _vector |= kMoveUp;
             }
 
-            SetWindowPos(renderer->Window(), nullptr, nextLeft, nextTop, 0, 0,
+            SetWindowPos(renderer->Window(), nullptr,
+                static_cast<LONG>(std::lround(_windowX)),
+                static_cast<LONG>(std::lround(_windowY)), 0, 0,
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
             UpdateFromWASD(gGameState.player, deltaSeconds, renderer->Width(), renderer->Height(), renderer->ClientScreenOrigin(), _scale);
@@ -158,7 +200,7 @@ void GameScene::Update() {
         ProcessPendingRemovals();
     }
     _timers.Update(*this, deltaSeconds);
-    renderer->Render(&gGameState, _object, UI::Texts(), _sceneTexts);
+    renderer->Render(&gGameState, _object, UI::Texts(), _sceneTexts, vsync);
 }
 
 void GameScene::Initialize(_In_ Renderer* renderer) {
@@ -174,7 +216,8 @@ void GameScene::Initialize(_In_ Renderer* renderer) {
 	gGameState.player.green = data.g;
 	gGameState.player.blue = data.b;
 	gGameState._isAlive = true;
-	_isPlayerInitialized = true;
+    _isPlayerInitialized = true;
+    _isWindowPositionInitialized = false;
     GetRenderer()->SetScale(_scale);
     _previousTime = std::chrono::steady_clock::now();
 
@@ -190,6 +233,17 @@ void GameScene::Initialize(_In_ Renderer* renderer) {
     }
 
     _sceneTexts.clear();
+    _sceneTexts.emplace(kCountdownTextId, UI::TextDrawRequest{
+        L"3", TEXT_FORMAT_GAMEOVER, UI::TextAnchor::Center,
+        0.0f, 0.0f, 500.0f, 80.0f
+    });
+    _isCountingDown = true;
+    _countdownStart = _previousTime;
+}
+
+void GameScene::StartGameplay() {
+    _isCountingDown = false;
+    _sceneTexts.erase(kCountdownTextId);
     AddOnce(2.0f, TimerCallbackList::SpawnEnemy);
     AddRepeatAfter(2.0f, 5.0f, TimerCallbackList::SpawnEnemy);
     AddRepeat(30.0f, TimerCallbackList::MapScale);

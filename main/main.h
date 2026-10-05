@@ -9,6 +9,7 @@
 
 extern std::mt19937 random_engine;
 extern GameState gGameState;
+extern UINT vsync;
 
 constexpr UI::TextId TEXT_UI_LIFE = 1;
 constexpr UI::TextId TEXT_UI_GAMEOVER = 2;

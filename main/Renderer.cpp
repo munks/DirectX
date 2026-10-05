@@ -324,7 +324,7 @@ void Renderer::Resize(UINT width, UINT height) {
     }
 }
 
-void Renderer::Render(_In_opt_ const GameState* gameState, const std::unordered_map<Object::ObjectId, std::unique_ptr<Object::Rectangle>>& rectangles, const UI::TextDrawRequests& globalTexts, const UI::TextDrawRequests& sceneTexts) {
+void Renderer::Render(_In_opt_ const GameState* gameState, const std::unordered_map<Object::ObjectId, std::unique_ptr<Object::Rectangle>>& rectangles, const UI::TextDrawRequests& globalTexts, const UI::TextDrawRequests& sceneTexts, UINT syncInterval) {
     if (!renderTarget_) return;
     constexpr float clearColor[] = { 0.04f, 0.06f, 0.10f, 1.0f };
     context_->ClearRenderTargetView(renderTarget_.Get(), clearColor);
@@ -369,5 +369,5 @@ void Renderer::Render(_In_opt_ const GameState* gameState, const std::unordered_
         DrawTexts(sceneTexts);
         d2dRenderTarget_->EndDraw();
     }
-    swapChain_->Present(1, 0);
+    swapChain_->Present(syncInterval, 0);
 }

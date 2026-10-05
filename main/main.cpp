@@ -2,24 +2,77 @@
 #include <memory>
 
 #include "main.h"
+#include "Input.h"
 #include "Renderer.h"
 #include "Scene/MainScene.h"
 #include "UI.h"
 
+#include <mmsystem.h>
+
 #include <chrono>
 #include <string>
+#include <thread>
+
+#pragma comment(lib, "winmm.lib")
 
 std::mt19937 random_engine{ std::random_device{}() };
 GameState gGameState;
+UINT vsync = 0;
 
 namespace {
     constexpr UINT kInitialWidth = 960;
     constexpr UINT kInitialHeight = 540;
+    constexpr auto kTargetFrameDuration = std::chrono::microseconds(1'000'000 / 240);
+    constexpr auto kSleepSafetyMargin = std::chrono::milliseconds(1);
     Renderer gRenderer;
-    bool gIsMovingOrSizing = false;
+
+    class TimerResolutionScope {
+        public:
+            TimerResolutionScope() : _isEnabled(timeBeginPeriod(1) == TIMERR_NOERROR) {}
+
+            ~TimerResolutionScope() {
+                if (_isEnabled) {
+                    timeEndPeriod(1);
+                }
+            }
+
+            TimerResolutionScope(const TimerResolutionScope&) = delete;
+            TimerResolutionScope& operator=(const TimerResolutionScope&) = delete;
+
+        private:
+            bool _isEnabled = false;
+    };
+
+    void WaitUntilFrameDeadline(std::chrono::steady_clock::time_point deadline) {
+        for (;;) {
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= deadline) {
+                return;
+            }
+
+            const auto remaining = deadline - now;
+            if (remaining > kSleepSafetyMargin) {
+                // 긴 구간은 sleep으로 양보하고, 마지막 1ms는 아래 yield로 정밀하게 맞춘다.
+                std::this_thread::sleep_for(remaining - kSleepSafetyMargin);
+            }
+            else {
+                std::this_thread::yield();
+            }
+        }
+    }
 
     LRESULT CALLBACK WindowProc(_In_ HWND window, _In_ UINT message, _In_ WPARAM wParam, _In_ LPARAM lParam) {
         switch (message) {
+            case WM_KEYDOWN:
+                Input::SetKeyDown(static_cast<std::uint32_t>(wParam));
+                return 0;
+            case WM_KEYUP:
+                Input::SetKeyUp(static_cast<std::uint32_t>(wParam));
+                return 0;
+            case WM_KILLFOCUS:
+                // 포커스를 잃는 동안 놓인 키의 WM_KEYUP은 이 창에 오지 않을 수 있다.
+                Input::Clear();
+                return 0;
             case WM_SIZE:
                 gRenderer.Resize(LOWORD(lParam), HIWORD(lParam));
                 return 0;
@@ -32,6 +85,7 @@ namespace {
 }
 
 int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In_ int showCommand) {
+    TimerResolutionScope timerResolution;
     constexpr wchar_t className[] = L"DirectXMovingRectangleWindow";
     const WNDCLASS windowClass{ CS_HREDRAW | CS_VREDRAW, WindowProc, 0, 0, instance,
         nullptr, LoadCursor(nullptr, IDC_ARROW), nullptr, nullptr, className };
@@ -77,13 +131,21 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
 
     MSG message{};
     auto fpsMeasureStart = std::chrono::steady_clock::now();
+    auto nextFrameTime = fpsMeasureStart;
     UINT frameCount = 0;
+    bool wasF1Down = false;
     while (message.message != WM_QUIT) {
         if (PeekMessage(&message, nullptr, 0, 0, PM_REMOVE)) {
             TranslateMessage(&message);
             DispatchMessage(&message);
             continue;
         }
+        const bool isF1Down = Input::IsDown(VK_F1);
+        if (isF1Down && !wasF1Down) {
+            vsync ^= 1;
+        }
+        wasF1Down = isF1Down;
+
         ++frameCount;
         const auto now = std::chrono::steady_clock::now();
         const float elapsedSeconds = std::chrono::duration<float>(now - fpsMeasureStart).count();
@@ -94,6 +156,16 @@ int WINAPI wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWSTR, _In
             frameCount = 0;
         }
         SceneBase::UpdateCurrentScene();
+
+        // VSync를 끈 상태에서도 240 FPS 주기까지 정밀하게 대기한다.
+        nextFrameTime += kTargetFrameDuration;
+        WaitUntilFrameDeadline(nextFrameTime);
+
+        // 한 프레임 이상 늦었을 때만 기준 시각을 재설정해 지연 누적을 막는다.
+        const auto actualFrameEndTime = std::chrono::steady_clock::now();
+        if (actualFrameEndTime - nextFrameTime > kTargetFrameDuration) {
+            nextFrameTime = actualFrameEndTime;
+        }
     }
     return 0;
 }

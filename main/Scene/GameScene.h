@@ -36,6 +36,7 @@ class GameScene final : public SceneBase {
     private:
         SceneData _initialData;
         bool IsOverlapping(const Object::Rectangle& first, const Object::Rectangle& second);
+        void StartGameplay();
         void QueueObjectRemoval(Object::ObjectId id);
         void ProcessPendingRemovals();
 
@@ -45,6 +46,8 @@ class GameScene final : public SceneBase {
         Object::ObjectId _nextObjectId = 1;
         UI::TextDrawRequests _sceneTexts;
         bool _isPlayerInitialized = false;
+        bool _isCountingDown = false;
+        std::chrono::steady_clock::time_point _countdownStart{};
         std::chrono::steady_clock::time_point _previousTime{};
         TimerManager _timers;
         int _vector = 0b00;
@@ -55,5 +58,9 @@ class GameScene final : public SceneBase {
         float _transitionScale = 1.0f;
         bool _pause = false;
         bool _wasF5Down = false;
+        // 창 API는 정수 좌표만 받는다. 소수 좌표를 누적해 고FPS에서도 이동량을 보존한다.
+        float _windowX = 0.0f;
+        float _windowY = 0.0f;
+        bool _isWindowPositionInitialized = false;
         
 };

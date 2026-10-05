@@ -53,7 +53,7 @@ class Renderer {
 
         bool Initialize(_In_ HWND window, UINT initialWidth, UINT initialHeight);
         void Resize(UINT width, UINT height);
-        void Render(_In_opt_ const GameState* gameState, const std::unordered_map<Object::ObjectId, std::unique_ptr<Object::Rectangle>>& rectangles, const UI::TextDrawRequests& globalTexts, const UI::TextDrawRequests& sceneTexts);
+        void Render(_In_opt_ const GameState* gameState, const std::unordered_map<Object::ObjectId, std::unique_ptr<Object::Rectangle>>& rectangles, const UI::TextDrawRequests& globalTexts, const UI::TextDrawRequests& sceneTexts, UINT syncInterval);
         void SetScale(float scale) { scale_ = scale; }
         bool CreateTextFormat(UI::TextFormatId id, _In_z_ const wchar_t* fontFamily, float fontSize, DWRITE_TEXT_ALIGNMENT textAlignment, DWRITE_PARAGRAPH_ALIGNMENT paragraphAlignment);
         IDWriteTextFormat* FindTextFormat(UI::TextFormatId id) const;

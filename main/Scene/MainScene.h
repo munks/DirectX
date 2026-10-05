@@ -2,7 +2,6 @@
 
 #include "SceneBase.h"
 
-#include <chrono>
 #include <unordered_map>
 
 #include "../Renderer.h"
@@ -20,6 +19,4 @@ class MainScene final : public SceneBase {
         std::unordered_map<Object::ObjectId, std::unique_ptr<Object::Rectangle>> _objects;
         UI::TextDrawRequests _sceneTexts;
         bool _wasSpaceDown = false;
-        bool _isCountingDown = false;
-        std::chrono::steady_clock::time_point _countdownStart{};
 };
